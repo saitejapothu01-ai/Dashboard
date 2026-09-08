@@ -114,11 +114,20 @@ with st.sidebar:
 
 # ── FILTER DATA ──────────────────────────────────────────────────────────────
 max_year = 2020 if include_2020 else 2019
+
+if not selected_groups:
+    st.warning("⚠️ Please select at least one income group from the sidebar to display results.")
+    st.stop()
+
 df = df_all[
     (df_all['Year'] >= year_range[0]) &
     (df_all['Year'] <= min(year_range[1], max_year)) &
     (df_all['income_group'].isin(selected_groups))
 ].copy()
+
+if df.empty:
+    st.warning("⚠️ No data available for the selected filters. Please adjust your selections.")
+    st.stop()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE 1 — OVERVIEW
@@ -127,7 +136,6 @@ if page == "🏠 Overview":
     st.markdown('<div class="main-header">🌱 Renewable Energy & CO₂ Emissions</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">The Moderating Role of Economic Development — Global Panel Analysis 2000–2019</div>', unsafe_allow_html=True)
 
-    # KPI metrics
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Countries Analysed", f"{df['Entity'].nunique():,}", delta=None)
@@ -141,8 +149,6 @@ if page == "🏠 Overview":
         st.metric("Avg CO₂ (thousand kt)", f"{avg_co2:,.0f}", delta=None)
 
     st.markdown("---")
-
-    # Key findings summary
     st.markdown("### 🔑 Key Research Findings")
     col1, col2 = st.columns(2)
 
@@ -190,7 +196,6 @@ if page == "🏠 Overview":
     </div>
     """, unsafe_allow_html=True)
 
-    # Quick chart
     st.markdown("### Global Trends at a Glance")
     col1, col2 = st.columns(2)
     with col1:
@@ -383,8 +388,7 @@ elif page == "📈 Regression Results":
         <div class="success-box">
         <b>Result:</b> Renewable energy share has a significant negative effect on CO₂ emissions.<br>
         <b>β = −0.0289 (SE = 0.0012, t = −24.78, p&lt;0.001)</b><br>
-        For every 1 percentage point increase in renewable energy share, CO₂ emissions decrease by approximately <b>2.89%</b>, 
-        holding all other variables constant.
+        For every 1 percentage point increase in renewable energy share, CO₂ emissions decrease by approximately <b>2.89%</b>.
         </div>
         """, unsafe_allow_html=True)
 
@@ -418,7 +422,6 @@ elif page == "📈 Regression Results":
         <b>Result:</b> GDP per capita DOES significantly moderate the renewable–emissions relationship.<br>
         <b>Interaction β = +0.0018 (SE = 0.0003, t = 6.280, p&lt;0.001)</b><br>
         The positive interaction term means the emissions-reducing effect of renewables <b>weakens as countries get wealthier</b>.
-        This is the primary finding of this dissertation.
         </div>
         """, unsafe_allow_html=True)
 
@@ -463,8 +466,7 @@ elif page == "🌍 EKC Analysis":
 
     st.markdown("""
     <div class="finding-box">
-    <b>EKC Hypothesis:</b> As countries develop economically, emissions first rise (industrialisation phase) then fall 
-    (post-industrial phase) — forming an inverted U-shape.<br><br>
+    <b>EKC Hypothesis:</b> As countries develop economically, emissions first rise then fall — forming an inverted U-shape.<br><br>
     <b>Result:</b> EKC CONFIRMED — Turning point at GDP per capita ≈ <b>$50,490</b><br>
     log_gdp² coefficient = <b>−0.0271 (p&lt;0.001)</b>
     </div>
@@ -492,20 +494,21 @@ elif page == "🌍 EKC Analysis":
             showlegend=True
         ))
         fig.add_vline(x=tp_log, line_dash='dash', line_color='#E24B4A', line_width=2,
-                      annotation_text=f'Turning Point<br>log GDP = {tp_log}<br>≈ ${tp_gdp:,.0f}',
+                      annotation_text=f'Turning Point ≈ ${tp_gdp:,.0f}',
                       annotation_position='top left')
 
         for grp in INCOME_ORDER:
             sub = df_model[df_model['income_group']==grp]
-            avg_log_gdp = sub['log_gdp'].mean()
-            avg_log_co2 = sub['log_co2'].mean()
-            fig.add_trace(go.Scatter(
-                x=[avg_log_gdp], y=[avg_log_co2],
-                mode='markers+text', name=grp,
-                marker=dict(size=14, color=INCOME_COLORS[grp], symbol='diamond'),
-                text=[grp.split(' ')[0]], textposition='top center',
-                textfont=dict(size=9)
-            ))
+            if len(sub) > 0:
+                avg_log_gdp = sub['log_gdp'].mean()
+                avg_log_co2 = sub['log_co2'].mean()
+                fig.add_trace(go.Scatter(
+                    x=[avg_log_gdp], y=[avg_log_co2],
+                    mode='markers+text', name=grp,
+                    marker=dict(size=14, color=INCOME_COLORS[grp], symbol='diamond'),
+                    text=[grp.split(' ')[0]], textposition='top center',
+                    textfont=dict(size=9)
+                ))
 
         fig.update_layout(
             title='Environmental Kuznets Curve — Model 4 Results',
@@ -522,30 +525,25 @@ elif page == "🌍 EKC Analysis":
         |---|---|---|
         | renewable_share | -0.0272*** | <0.001 |
         | log_gdp | +0.5870*** | <0.001 |
-        | **log_gdp²** | **-0.0271***  | **<0.001** |
+        | **log_gdp²** | **-0.0271*** | **<0.001** |
         | energy_intensity | +0.0247*** | <0.001 |
         | R² | 0.9959 | — |
         | N | 3,072 | — |
         """)
 
         st.markdown("---")
-        st.markdown("### Turning Point")
         st.metric("EKC Turning Point", "$50,490", delta="GDP per capita")
         st.markdown("""
         **Formula:** −β₁ / (2β₂)  
         = −0.5870 / (2 × −0.0271)  
         = 10.830 (log scale)  
-        = exp(10.830)  
-        = **$50,490**
+        = exp(10.830) = **$50,490**
         """)
 
         st.markdown("---")
-        st.markdown("### What this means")
         st.markdown("""
-        🔴 **Below $50,490** → Emissions RISE as income grows (most of the world)
-        
-        🟢 **Above $50,490** → Emissions FALL as income grows (only wealthiest nations)
-        
+        🔴 **Below $50,490** → Emissions RISE as income grows  
+        🟢 **Above $50,490** → Emissions FALL as income grows  
         Only ~15 countries have crossed this threshold.
         """)
 
@@ -569,7 +567,7 @@ elif page == "💡 Income Group Diagnostic":
     st.markdown("""
     <div class="warning-box">
     <b>⭐ Key Finding:</b> Low-income countries experience the STRONGEST emissions reduction from renewable energy,
-    while upper-middle income countries experience the WEAKEST. This is the opposite of what most literature assumes.
+    while upper-middle income countries experience the WEAKEST.
     </div>
     """, unsafe_allow_html=True)
 
@@ -588,16 +586,11 @@ elif page == "💡 Income Group Diagnostic":
         st.dataframe(ig_results, use_container_width=True, hide_index=True)
         st.caption("*** p<0.001. Country + year fixed effects in all models.")
 
-        st.markdown("### Interpretation")
         st.markdown("""
-        - **Low income (β = −0.0465):** Each 1% increase in renewable share reduces CO₂ by **4.65%**
+        - **Low income (β = −0.0465):** Each 1% increase reduces CO₂ by **4.65%**
         - **Lower middle (β = −0.0296):** Reduces CO₂ by **2.96%**
         - **High income (β = −0.0262):** Reduces CO₂ by **2.62%**
         - **Upper middle (β = −0.0125):** Reduces CO₂ by only **1.25%** — weakest effect
-        
-        **Why?** Upper-middle income countries (like China, Brazil) are simultaneously 
-        industrialising rapidly, meaning energy demand growth offsets the renewable benefit.
-        Low-income countries displace more carbon-intensive fuels proportionally.
         """)
 
     with col2:
@@ -605,13 +598,11 @@ elif page == "💡 Income Group Diagnostic":
         groups_short = ['High income','Upper middle','Lower middle','Low income']
 
         fig = go.Figure()
-        for i, (grp, coef, full) in enumerate(zip(groups_short, coefs, INCOME_ORDER)):
+        for grp, coef, full in zip(groups_short, coefs, INCOME_ORDER):
             fig.add_trace(go.Bar(
-                x=[grp], y=[coef],
-                name=full,
+                x=[grp], y=[coef], name=full,
                 marker_color=INCOME_COLORS[full],
-                text=[f'{coef:.4f}***'],
-                textposition='inside',
+                text=[f'{coef:.4f}***'], textposition='inside',
                 textfont=dict(color='white', size=13, family='Arial Bold')
             ))
         fig.add_hline(y=0, line_dash='dash', line_color='black', line_width=1)
@@ -626,26 +617,16 @@ elif page == "💡 Income Group Diagnostic":
         st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
-    st.markdown("### How this contextualises the Global Interaction Model")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("""
-        <div class="finding-box">
-        <b>Global Model 2 found:</b><br>
-        Positive interaction (renew × GDP) → effect weakens as GDP rises
-        </div>""", unsafe_allow_html=True)
+        st.markdown("""<div class="finding-box"><b>Global Model 2 found:</b><br>
+        Positive interaction → effect weakens as GDP rises</div>""", unsafe_allow_html=True)
     with col2:
-        st.markdown("""
-        <div class="warning-box">
-        <b>But upper-middle breaks the pattern:</b><br>
-        Their effect (−0.0125) is weaker than high income (−0.0262) — rapid industrialisation explains this anomaly
-        </div>""", unsafe_allow_html=True)
+        st.markdown("""<div class="warning-box"><b>Upper-middle breaks the pattern:</b><br>
+        Rapid industrialisation offsets renewable benefits</div>""", unsafe_allow_html=True)
     with col3:
-        st.markdown("""
-        <div class="success-box">
-        <b>Policy implication:</b><br>
-        Climate finance should prioritise low-income countries where renewable investment delivers the MOST emissions reduction per dollar
-        </div>""", unsafe_allow_html=True)
+        st.markdown("""<div class="success-box"><b>Policy implication:</b><br>
+        Prioritise climate finance for low-income countries where it delivers most per dollar</div>""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE 6 — COUNTRY EXPLORER
@@ -653,53 +634,73 @@ elif page == "💡 Income Group Diagnostic":
 elif page == "🔍 Country Explorer":
     st.markdown('<div class="main-header">🔍 Country Explorer</div>', unsafe_allow_html=True)
 
+    # ── SAFE COUNTRY LIST FROM FILTERED DATA ─────────────────────────────
     available_countries = sorted(df['Entity'].dropna().unique().tolist())
+
+    if not available_countries:
+        st.warning("⚠️ No countries available for the selected filters. Please adjust your income group or year range selections.")
+        st.stop()
+
+    # ── SAFE DEFAULTS — only use countries that exist in current filtered list
+    preferred = ['United Kingdom', 'India', 'China', 'Nigeria', 'Brazil', 'Germany']
+    safe_defaults = [c for c in preferred if c in available_countries]
+
+    # If none of preferred exist, just take first 3 available
+    if not safe_defaults:
+        safe_defaults = available_countries[:3]
+    else:
+        safe_defaults = safe_defaults[:6]
+
     selected_countries = st.multiselect(
         "Select countries to compare (max 6)",
         options=available_countries,
-        default=['United Kingdom','India','China','Nigeria','Brazil','Germany'][:min(6,len(available_countries))]
+        default=safe_defaults
     )
 
-    if selected_countries:
-        country_df = df[df['Entity'].isin(selected_countries)].copy()
+    if not selected_countries:
+        st.info("👆 Please select at least one country from the dropdown above.")
+        st.stop()
 
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = px.line(country_df, x='Year', y='co2_emissions',
-                          color='Entity', title='CO₂ Emissions Over Time',
-                          labels={'co2_emissions':'CO₂ Emissions (kt)','Entity':'Country'})
-            fig.update_layout(height=380)
-            st.plotly_chart(fig, use_container_width=True)
+    country_df = df[df['Entity'].isin(selected_countries)].copy()
 
-        with col2:
-            fig = px.line(country_df, x='Year', y='renewable_share',
-                          color='Entity', title='Renewable Energy Share Over Time',
-                          labels={'renewable_share':'Renewable Share (%)','Entity':'Country'})
-            fig.update_layout(height=380)
-            st.plotly_chart(fig, use_container_width=True)
+    if country_df.empty:
+        st.warning("⚠️ No data found for selected countries with current filters.")
+        st.stop()
 
-        st.markdown("### Country Comparison Table (Latest Available Year)")
-        latest = country_df.sort_values('Year').groupby('Entity').last().reset_index()
-        summary = latest[['Entity','income_group','co2_emissions','renewable_share',
-                           'gdp_per_capita','gdp_growth']].copy()
-        summary.columns = ['Country','Income Group','CO₂ (kt)','Renewable (%)','GDP/Capita','GDP Growth (%)']
-        summary[['CO₂ (kt)','GDP/Capita']] = summary[['CO₂ (kt)','GDP/Capita']].round(0)
-        summary[['Renewable (%)','GDP Growth (%)']] = summary[['Renewable (%)','GDP Growth (%)']].round(2)
-        st.dataframe(summary, use_container_width=True, hide_index=True)
-
-        st.markdown("### Scatter: GDP per Capita vs CO₂ Emissions")
-        fig = px.scatter(country_df, x='gdp_per_capita', y='co2_emissions',
-                         color='Entity', size='renewable_share',
-                         animation_frame='Year',
-                         title='GDP per Capita vs CO₂ Emissions (bubble size = renewable share)',
-                         labels={'gdp_per_capita':'GDP per Capita (USD)',
-                                 'co2_emissions':'CO₂ Emissions (kt)',
-                                 'renewable_share':'Renewable Share (%)'})
-        fig.update_layout(height=500)
+    col1, col2 = st.columns(2)
+    with col1:
+        fig = px.line(country_df, x='Year', y='co2_emissions',
+                      color='Entity', title='CO₂ Emissions Over Time',
+                      labels={'co2_emissions':'CO₂ Emissions (kt)','Entity':'Country'})
+        fig.update_layout(height=380)
         st.plotly_chart(fig, use_container_width=True)
 
-    else:
-        st.info("Please select at least one country from the dropdown above.")
+    with col2:
+        fig = px.line(country_df, x='Year', y='renewable_share',
+                      color='Entity', title='Renewable Energy Share Over Time',
+                      labels={'renewable_share':'Renewable Share (%)','Entity':'Country'})
+        fig.update_layout(height=380)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### Country Comparison Table (Latest Available Year)")
+    latest = country_df.sort_values('Year').groupby('Entity').last().reset_index()
+    summary = latest[['Entity','income_group','co2_emissions','renewable_share',
+                       'gdp_per_capita','gdp_growth']].copy()
+    summary.columns = ['Country','Income Group','CO₂ (kt)','Renewable (%)','GDP/Capita','GDP Growth (%)']
+    summary[['CO₂ (kt)','GDP/Capita']] = summary[['CO₂ (kt)','GDP/Capita']].round(0)
+    summary[['Renewable (%)','GDP Growth (%)']] = summary[['Renewable (%)','GDP Growth (%)']].round(2)
+    st.dataframe(summary, use_container_width=True, hide_index=True)
+
+    st.markdown("### GDP per Capita vs CO₂ Emissions (Animated)")
+    fig = px.scatter(country_df, x='gdp_per_capita', y='co2_emissions',
+                     color='Entity', size='renewable_share',
+                     animation_frame='Year',
+                     title='GDP per Capita vs CO₂ Emissions (bubble size = renewable share)',
+                     labels={'gdp_per_capita':'GDP per Capita (USD)',
+                             'co2_emissions':'CO₂ Emissions (kt)',
+                             'renewable_share':'Renewable Share (%)'})
+    fig.update_layout(height=500)
+    st.plotly_chart(fig, use_container_width=True)
 
 # ── FOOTER ───────────────────────────────────────────────────────────────────
 st.markdown("---")
